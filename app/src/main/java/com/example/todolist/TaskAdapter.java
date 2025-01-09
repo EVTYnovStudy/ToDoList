@@ -22,7 +22,7 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
     private final DatabaseHelper db;
 
     // Constructeur
-    public TaskAdapter(Context context, List<com.example.todolist.Task> taskList, DatabaseHelper db) {
+    public TaskAdapter(Context context, List<com.example.todolist.Task> taskList, DatabaseHelper db, MainActivity mainActivity) {
         this.context = context;
         this.taskList = taskList;
         this.db = db;
@@ -30,7 +30,6 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
 
     @Override
     public TaskViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        // Créez un View pour chaque élément de la liste (Task)
         View view = LayoutInflater.from(context).inflate(R.layout.task, parent, false);
         return new TaskViewHolder(view);
     }
@@ -42,34 +41,30 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         holder.tvTaskTitle.setText(task.getName());
         holder.tvTaskDescription.setText(task.getDescription());
         holder.tvTaskDate.setText(task.getDate());
-
-        // Mettre à jour le CheckBox pour indiquer si la tâche est terminée
         holder.cbCompleted.setChecked(task.isCompleted());
-
-        // Ajouter un listener pour la suppression de la tâche
-        holder.btnDelete.setOnClickListener(v -> {
-            // Code pour supprimer la tâche de la base de données
-            db.deleteTask(task.getId());  // Assure-toi que cette méthode existe dans ton DatabaseHelper
-
-            // Supprimer la tâche de la liste et mettre à jour l'affichage
-            taskList.remove(position);
-            notifyItemRemoved(position);
-        });
-
-        // Ajouter un listener pour la mise à jour de l'état de la tâche (complétée / non complétée)
         holder.cbCompleted.setOnCheckedChangeListener((buttonView, isChecked) -> {
             task.setCompleted(isChecked);
-            db.updateTaskCompletionStatus(task);  // Assure-toi que cette méthode existe dans ton DatabaseHelper
+            db.updateTaskCompletionStatus(task);
         });
-    }
 
+        holder.btnDelete.setOnClickListener(v -> {
+            db.deleteTask(task.getId());
+            taskList.remove(position);
+            notifyItemRemoved(position);
+            notifyItemRangeChanged(position, taskList.size());
+        });
+
+        holder.itemView.setOnClickListener(v -> {
+            ((MainActivity) context).showUpdateTaskDialog(task, position);
+        });
+
+    }
 
     @Override
     public int getItemCount() {
-        return taskList.size();  // Retourne le nombre total d'éléments dans la liste
+        return taskList.size();
     }
 
-    // ViewHolder pour chaque élément de la liste
     public static class TaskViewHolder extends RecyclerView.ViewHolder {
         TextView tvTaskTitle;
         TextView tvTaskDescription;

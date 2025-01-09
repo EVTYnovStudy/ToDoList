@@ -19,12 +19,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COLUMN_NAME = "name";
     public static final String COLUMN_DESCRIPTION = "description";
     public static final String COLUMN_IS_SHARED = "is_shared";
-    public static final String COLUMN_IS_COMPLETED = "is_completed";
+    public static final String COLUMN_IS_COMPLETED = "completed";
     public static final String COLUMN_DATE = "date";
-    public static final int DATABASE_VERSION = 2;
+    public static final int DATABASE_VERSION = 10;
 
-
-    // Constructeur
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
@@ -44,64 +42,76 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion < 2) {
-            String ALTER_TABLE = "ALTER TABLE " + TABLE_NAME + " ADD COLUMN " + COLUMN_DATE + " TEXT";
-            Log.d("DATABASE", "Adding COLUMN_DATE to tasks table.");
-            db.execSQL(ALTER_TABLE);
 
-            String UPDATE_DEFAULT_DATE = "UPDATE " + TABLE_NAME + " SET " + COLUMN_DATE + " = DATE('now')";
-            Log.d("DATABASE", "Updating existing tasks with default date.");
-            db.execSQL(UPDATE_DEFAULT_DATE);
+        if (oldVersion < 2) {
+            String ALTER_TABLE_DATE = "ALTER TABLE " + TABLE_NAME + " ADD COLUMN " + COLUMN_DATE + " TEXT";
+            db.execSQL(ALTER_TABLE_DATE);
+            Log.d("DATABASE", "Added COLUMN_DATE to tasks table.");
+        }
+
+        if (oldVersion < 10) {
+            String TEMP_TABLE = TABLE_NAME + "_temp";
+            String CREATE_TEMP_TABLE = "CREATE TABLE " + TEMP_TABLE + "("
+                    + COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + COLUMN_NAME + " TEXT, "
+                    + COLUMN_DESCRIPTION + " TEXT, "
+                    + COLUMN_IS_SHARED + " INTEGER, "
+                    + COLUMN_IS_COMPLETED + " INTEGER DEFAULT 0, "
+                    + COLUMN_DATE + " TEXT)";
+            db.execSQL(CREATE_TEMP_TABLE);
+            String COPY_DATA = "INSERT INTO " + TEMP_TABLE + " ("
+                    + COLUMN_ID + ", " + COLUMN_NAME + ", " + COLUMN_DESCRIPTION + ", "
+                    + COLUMN_IS_SHARED + ", " + COLUMN_DATE + ", " + COLUMN_IS_COMPLETED + ") "
+                    + "SELECT "
+                    + COLUMN_ID + ", " + COLUMN_NAME + ", " + COLUMN_DESCRIPTION + ", "
+                    + COLUMN_IS_SHARED + ", " + COLUMN_DATE + ", 0 "
+                    + "FROM " + TABLE_NAME;
+            db.execSQL(COPY_DATA);
+            db.execSQL("DROP TABLE " + TABLE_NAME);
+            db.execSQL("ALTER TABLE " + TEMP_TABLE + " RENAME TO " + TABLE_NAME);
+            Log.d("DATABASE", "Recreated tasks table with correct columns.");
         }
     }
 
-
-    // Méthode pour ajouter une tâche
     public long addTask(Task task) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COLUMN_NAME, task.getName());
         values.put(COLUMN_DESCRIPTION, task.getDescription());
-        values.put(COLUMN_IS_SHARED, task.isShared() ? 1 : 0);
-        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0);
+        values.put(COLUMN_IS_SHARED, task.isShared() ? 1 : 0); //NON UTILISE
+        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0); //1 TRUE | 0 FALSE
         values.put(COLUMN_DATE, task.getDate());
-
-        // Insertion dans la base de données
         return db.insert(TABLE_NAME, null, values);
     }
 
-    // Méthode pour récupérer toutes les tâches
     @SuppressLint("Range")
     public List<Task> getAllTasks() {
         List<Task> taskList = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_NAME, null);
 
-        Cursor cursor = db.query(TABLE_NAME, null, null, null, null, null, null);
-        if (cursor != null && cursor.moveToFirst()) {
+        if (cursor.moveToFirst()) {
             do {
-                int id = cursor.getInt(cursor.getColumnIndex(COLUMN_ID));
-                String name = cursor.getString(cursor.getColumnIndex(COLUMN_NAME));
-                String description = cursor.getString(cursor.getColumnIndex(COLUMN_DESCRIPTION));
-                boolean isShared = cursor.getInt(cursor.getColumnIndex(COLUMN_IS_SHARED)) == 1;
-                boolean isCompleted = cursor.getInt(cursor.getColumnIndex(COLUMN_IS_COMPLETED)) == 1;
-                String date = cursor.getString(cursor.getColumnIndex(COLUMN_DATE));
-
-                Task task = new Task(id, name, description, isShared, isCompleted, date);
+                Task task = new Task();
+                task.setId(cursor.getInt(cursor.getColumnIndex(COLUMN_ID)));
+                task.setName(cursor.getString(cursor.getColumnIndex(COLUMN_NAME)));
+                task.setDescription(cursor.getString(cursor.getColumnIndex(COLUMN_DESCRIPTION)));
+                task.setDate(cursor.getString(cursor.getColumnIndex(COLUMN_DATE)));
+                task.setCompleted(cursor.getInt(cursor.getColumnIndex(COLUMN_IS_COMPLETED)) == 1);
                 taskList.add(task);
             } while (cursor.moveToNext());
-            cursor.close();
         }
-
+        cursor.close();
+        db.close();
         return taskList;
     }
 
-
-
-    public int markAsCompleted(int id, boolean isCompleted) {
+    public void updateTaskCompletionStatus(Task task) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-        values.put(COLUMN_IS_COMPLETED, isCompleted ? 1 : 0);
-        return db.update(TABLE_NAME, values, COLUMN_ID + " = ?", new String[]{String.valueOf(id)});
+        values.put("completed", task.isCompleted() ? 1 : 0); //1 TRUE | 0 FALSE
+        db.update(TABLE_NAME, values, "id = ?", new String[]{String.valueOf(task.getId())});
+        db.close();
     }
 
     public void deleteTask(int taskId) {
@@ -110,31 +120,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
     }
 
-    public void updateTaskCompletionStatus(Task task) {
+    public void updateTask(Task task) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0);
-
+        values.put(COLUMN_NAME, task.getName());
+        values.put(COLUMN_DESCRIPTION, task.getDescription());
+        values.put(COLUMN_DATE, task.getDate());
+        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0); //1 TRUE | 0 FALSE
         db.update(TABLE_NAME, values, COLUMN_ID + " = ?", new String[]{String.valueOf(task.getId())});
         db.close();
     }
 
-    public void updateTask(Task task) {
-        SQLiteDatabase db = this.getWritableDatabase();
-
-        // Créer un objet ContentValues pour stocker les nouvelles valeurs à mettre à jour
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(COLUMN_NAME, task.getName());  // Nom de la tâche
-        contentValues.put(COLUMN_DESCRIPTION, task.getDescription());  // Description de la tâche
-        contentValues.put(COLUMN_DATE, task.getDate());  // Date de la tâche
-        contentValues.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0);  // Statut de la tâche (complétée ou non)
-
-        // Effectuer la mise à jour sur la base de données en spécifiant l'ID de la tâche à mettre à jour
-        db.update(TABLE_NAME, contentValues, COLUMN_ID + " = ?", new String[]{String.valueOf(task.getId())});
-
-        db.close();  // Fermer la base de données après l'opération
-    }
-
-
 }
-
