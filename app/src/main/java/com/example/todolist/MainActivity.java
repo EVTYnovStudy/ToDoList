@@ -17,11 +17,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.todolist.modele.Task;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.ValueEventListener;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -33,7 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private TaskAdapter taskAdapter;
     private List<Task> taskList = new ArrayList<>();
-    private DatabaseReference database; // Référence Firebase
+    private FirebaseDatabaseHelper database; // Référence Firebase
     private Button btnAddTask;
     private TextView tvEmptyMessage;
 
@@ -47,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
         tvEmptyMessage = findViewById(R.id.tv_empty_message);
 
         // Initialisation de Firebase
-        database = FirebaseDatabase.getInstance().getReference("tasks");
+        database = new FirebaseDatabaseHelper();  // Création de l'instance FirebaseDatabaseHelper
 
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         taskAdapter = new TaskAdapter(this, taskList, this);
@@ -59,31 +54,26 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadTasks() {
-        taskList.clear();
+        taskList.clear(); // Vider la liste avant de la remplir
 
-        database.addValueEventListener(new ValueEventListener() {
+        database.getAllTasks(new FirebaseDatabaseHelper.DatabaseCallback() {
             @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                taskList.clear();
-                for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-                    Task task = snapshot.getValue(Task.class);
-                    if (task != null) {
-                        task.setId(snapshot.getKey()); // Associer l'ID Firebase
-                        taskList.add(task);
-                    }
-                }
+            public void onSuccess(Object result) {
+                List<Task> tasks = (List<Task>) result;
+                taskList.addAll(tasks);
 
                 if (taskList.isEmpty()) {
                     tvEmptyMessage.setVisibility(View.VISIBLE);
                 } else {
                     tvEmptyMessage.setVisibility(View.GONE);
                 }
+
                 taskAdapter.notifyDataSetChanged();
             }
 
             @Override
-            public void onCancelled(DatabaseError databaseError) {
-                Log.e("Firebase", "Erreur de lecture : " + databaseError.getMessage());
+            public void onFailure(String error) {
+                Log.e("Firebase", "Erreur lors de la récupération des tâches : " + error);
             }
         });
     }
@@ -141,43 +131,55 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void addTask(Task task) {
-        String taskId = database.push().getKey(); // Génère un ID unique
-        if (taskId != null) {
-            task.setId(taskId);
-            database.child(taskId).setValue(task)
-                    .addOnSuccessListener(aVoid -> {
-                        taskAdapter.addTask(task); // Ajout local
-                        Toast.makeText(this, "Tâche ajoutée avec succès", Toast.LENGTH_SHORT).show();
-                    })
-                    .addOnFailureListener(e ->
-                            Toast.makeText(this, "Erreur lors de l'ajout", Toast.LENGTH_SHORT).show());
-        }
+        database.addTask(task, new FirebaseDatabaseHelper.DatabaseCallback() {
+            @Override
+            public void onSuccess(Object result) {
+                taskAdapter.addTask(task); // Ajout local de la tâche à l'adaptateur
+                Toast.makeText(MainActivity.this, "Tâche ajoutée avec succès", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onFailure(String error) {
+                Toast.makeText(MainActivity.this, "Erreur lors de l'ajout", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     public void updateTaskInFirebase(Task task) {
         if (task.getId() != null) {
-            database.child(task.getId()).setValue(task)
-                    .addOnSuccessListener(aVoid ->
-                            Toast.makeText(this, "Tâche mise à jour avec succès", Toast.LENGTH_SHORT).show())
-                    .addOnFailureListener(e ->
-                            Toast.makeText(this, "Erreur lors de la mise à jour", Toast.LENGTH_SHORT).show());
+            database.updateTaskCompletionStatus(task, new FirebaseDatabaseHelper.DatabaseCallback() {
+                @Override
+                public void onSuccess(Object result) {
+                    Toast.makeText(MainActivity.this, "Tâche mise à jour avec succès", Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    Toast.makeText(MainActivity.this, "Erreur lors de la mise à jour", Toast.LENGTH_SHORT).show();
+                }
+            });
         } else {
-            Toast.makeText(this, "ID de tâche manquant pour la mise à jour", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, "ID de tâche manquant pour la mise à jour", Toast.LENGTH_SHORT).show();
         }
     }
 
     public void deleteTaskFromFirebase(Task task) {
         if (task.getId() != null) {
-            database.child(task.getId()).removeValue()
-                    .addOnSuccessListener(aVoid -> {
-                        taskList.remove(task); // Suppression locale
-                        taskAdapter.notifyDataSetChanged(); // Mise à jour UI
-                        Toast.makeText(this, "Tâche supprimée avec succès", Toast.LENGTH_SHORT).show();
-                    })
-                    .addOnFailureListener(e ->
-                            Toast.makeText(this, "Erreur lors de la suppression", Toast.LENGTH_SHORT).show());
+            database.deleteTask(task, new FirebaseDatabaseHelper.DatabaseCallback() {
+                @Override
+                public void onSuccess(Object result) {
+                    taskList.remove(task); // Suppression locale de la tâche
+                    taskAdapter.notifyDataSetChanged(); // Mise à jour de l'UI
+                    Toast.makeText(MainActivity.this, "Tâche supprimée avec succès", Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    Toast.makeText(MainActivity.this, "Erreur lors de la suppression", Toast.LENGTH_SHORT).show();
+                }
+            });
         } else {
-            Toast.makeText(this, "ID de tâche manquant pour la suppression", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, "ID de tâche manquant pour la suppression", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -230,4 +232,3 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 }
-
