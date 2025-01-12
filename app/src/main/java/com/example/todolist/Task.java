@@ -36,10 +36,6 @@ public class Task {
     public String getDescription() {return description;}
     public void setDescription(String description) {this.description = description;}
 
-    //Partage (Firebase)
-    public boolean isShared() {return isShared;}
-    public void setShared(boolean isShared) {this.isShared = isShared;}
-
     //Complete (checkbox)
     public boolean isCompleted() {return isCompleted;}
     public void setCompleted(boolean completed) {this.isCompleted = completed;}

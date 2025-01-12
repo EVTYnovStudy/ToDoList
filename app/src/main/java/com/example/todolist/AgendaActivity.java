@@ -1,12 +1,10 @@
 package com.example.todolist;
 
-import static android.app.ProgressDialog.show;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
@@ -24,67 +22,69 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.navigation.NavigationView;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.DocumentReference;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Calendar;
-import java.text.SimpleDateFormat;
 
-import com.google.firebase.firestore.FirebaseFirestore;
-
-public class MainActivity extends AppCompatActivity {
+public class AgendaActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
-    private TaskAdapter taskAdapter;
+    private OnlineTaskAdapter onlineTaskAdapter;
     private List<Task> taskList = new ArrayList<>();
-    private LocalDatabaseHelper db;
+    private FirebaseFirestore odb;
     private Button btnAddTask;
     private TextView tvEmptyMessage;
     private DrawerLayout drawerLayout;
     private ActionBarDrawerToggle toggle;
-    private FirebaseFirestore odb;
+    private List<OnlineTask> OnlineTaskList = new ArrayList<>();
 
 
     @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         odb = FirebaseFirestore.getInstance();
-        addSampleAgenda();
         setContentView(R.layout.activity_main);
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         getSupportActionBar().setTitle("My To Do List");
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+
         recyclerView = findViewById(R.id.recycler_view);
         btnAddTask = findViewById(R.id.btn_add_task);
         tvEmptyMessage = findViewById(R.id.tv_empty_message);
-        db = new LocalDatabaseHelper(this);
+        odb = OnlineDataBaseHelper.odb;
+
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        taskAdapter = new TaskAdapter(this, taskList, db, this);
-        recyclerView.setAdapter(taskAdapter);
+        onlineTaskAdapter = new OnlineTaskAdapter(this, taskList);
+        recyclerView.setAdapter(onlineTaskAdapter);
+
         loadTasks();
         btnAddTask.setOnClickListener(v -> showAddTaskDialog());
+
         drawerLayout = findViewById(R.id.drawer_layout);
         toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         drawerLayout.addDrawerListener(toggle);
         toggle.syncState();
+
         NavigationView navigationView = findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(item -> {
             if (item.getItemId() == R.id.nav_home){
-                Toast.makeText(this, "Vous etes déjà dans l'accueil", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Rejoindre l'accueil sélectionné", Toast.LENGTH_SHORT).show();
             } else if (item.getItemId() == R.id.joinagenda){
                 Toast.makeText(this, "Rejoindre un agenda sélectionné", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(AgendaActivity.this, MainActivity.class);
                 showJoinAgendaDialog();
             } else if (item.getItemId() == R.id.createagenda){
                 Toast.makeText(this, "Creer un agenda séléctionné", Toast.LENGTH_SHORT).show();
                 showCreateAgendaDialog();
             } else if (item.getItemId() == R.id.agendaview){
                 Toast.makeText(this, "Mode calendrier séléctionné", Toast.LENGTH_SHORT).show();
-                Intent intent = new Intent(MainActivity.this, CalendarActivity.class);
+                Intent intent = new Intent(AgendaActivity.this, CalendarActivity.class);
                 startActivity(intent);
-            }
-            else {
-                Log.e("MainActivity", "NavigationView est nul ! Vérifiez l'ID dans le XML.");
             }
             drawerLayout.closeDrawers();
             return true;
@@ -92,14 +92,39 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadTasks() {
-        taskList.clear();
-        List<Task> tasksFromDb = db.getAllTasks();
-        if (tasksFromDb != null && !tasksFromDb.isEmpty()) {taskList.addAll(tasksFromDb);}
-        else {Log.e("LOAD_TASKS", "Aucune tâche trouvée dans la base de données");}
-        if (taskList.isEmpty()) {tvEmptyMessage.setVisibility(View.VISIBLE);}
-        else {tvEmptyMessage.setVisibility(View.GONE);}
-        taskAdapter.notifyDataSetChanged();
+        taskList.clear();  // Réinitialise la liste des tâches
+
+        // Appel pour récupérer les tâches depuis la base de données
+        OnlineDataBaseHelper.getOnlineTask(Agenda.getId(), new OnlineDataBaseHelper.OnlineTaskListener() {
+
+            @Override
+            public void onTasksLoaded(List<Task> tasks) {
+                if (tasks != null && !tasks.isEmpty()) {
+                    taskList.addAll(tasks);  // Ajoute les tâches récupérées à la liste
+                    tvEmptyMessage.setVisibility(View.GONE);  // Cache le message "vide"
+                } else {
+                    tvEmptyMessage.setVisibility(View.VISIBLE);  // Affiche le message si aucune tâche
+                }
+                onlineTaskAdapter.notifyDataSetChanged();  // Met à jour l'adaptateur
+            }
+
+            @Override
+            public void onTaskAdded(String taskId, OnlineTask task) {
+                // Cette méthode peut être implémentée si vous devez gérer l'ajout d'une tâche
+            }
+
+            @Override
+            public void onTaskAddFailed(Exception e) {
+                // Gestion des erreurs d'ajout
+            }
+        });
     }
+
+
+
+
+
+
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -109,12 +134,12 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-
     private void showAddTaskDialog() {
         EditText editTextTitle = new EditText(this);
         editTextTitle.setHint("Titre de la tâche");
         EditText editTextDescription = new EditText(this);
         editTextDescription.setHint("Description de la tâche");
+
         final Calendar calendar = Calendar.getInstance();
         final int year = calendar.get(Calendar.YEAR);
         final int month = calendar.get(Calendar.MONTH);
@@ -125,19 +150,21 @@ public class MainActivity extends AppCompatActivity {
         editTextDate.setClickable(true);
         editTextDate.setOnClickListener(v -> {
             DatePickerDialog datePickerDialog = new DatePickerDialog(
-                    MainActivity.this,
+                    AgendaActivity.this,
                     (view, year1, monthOfYear, dayOfMonth) -> {
                         editTextDate.setText(dayOfMonth + "/" + (monthOfYear + 1) + "/" + year1);},
                     year, month, day
             );
             datePickerDialog.show();
         });
+
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(30, 20, 30, 20);
         layout.addView(editTextTitle);
         layout.addView(editTextDescription);
         layout.addView(editTextDate);
+
         new AlertDialog.Builder(this)
                 .setTitle("Ajouter une tâche")
                 .setView(layout)
@@ -145,59 +172,54 @@ public class MainActivity extends AppCompatActivity {
                     String title = editTextTitle.getText().toString();
                     String description = editTextDescription.getText().toString();
                     String date = editTextDate.getText().toString();
-                    if (title.isEmpty() || description.isEmpty() || date.isEmpty()) {Toast.makeText(MainActivity.this, "Tous les champs doivent être remplis", Toast.LENGTH_SHORT).show();}
-                    else {
-                        Task newTask = new Task(0, title, description, false, false, date);
-                        long id = db.addTask(newTask);
-                        newTask.setId((int) id);
-                        taskList.add(newTask);
-                        taskAdapter.notifyItemInserted(taskList.size() - 1);
-                        loadTasks();
+                    if (title.isEmpty() || description.isEmpty() || date.isEmpty()) {
+                        Toast.makeText(AgendaActivity.this, "Tous les champs doivent être remplis", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Crée une nouvelle tâche OnlineTask
+                        String agendaId = Agenda.getId(); // Utilise l'ID de l'agenda actuel
+                        OnlineTask newTask = new OnlineTask(
+                                "", // ID (le Firestore générera un ID unique, donc laisse-le vide ici)
+                                title,
+                                description,
+                                false, // Statut de complétion
+                                agendaId
+                        );
+
+                        // Appel de la méthode asynchrone pour ajouter la tâche en ligne
+                        new OnlineDataBaseHelper.OnlineTaskListener() {
+                            @Override
+                            public void onTasksLoaded(List<Task> tasks) {
+                                // Cette méthode est nécessaire, même si vous n'en avez pas besoin
+                                // Vous pouvez la laisser vide si vous ne l'utilisez pas
+                            }
+
+                            @Override
+                            public void onTaskAdded(String taskId, OnlineTask task) {
+                                // Ajoute l'ID Firestore à la tâche
+                                OnlineTask.setOnlineId(taskId);  // Le Firestore génère l'ID du document
+
+                                // Ajoute la tâche à la liste locale
+                                OnlineTaskList.add(task);
+
+                                // Notifie l'adaptateur de l'ajout de l'élément
+                                onlineTaskAdapter.notifyItemInserted(taskList.size() - 1);
+
+                                // Recharge les tâches ou met à jour l'interface
+                                loadTasks();
+                            }
+
+                            @Override
+                            public void onTaskAddFailed(Exception e) {
+                                // Gestion des erreurs d'ajout
+                                Toast.makeText(AgendaActivity.this, "Échec de l'ajout de la tâche", Toast.LENGTH_SHORT).show();
+                            }
+                        };
                     }
                 })
                 .setNegativeButton("Annuler", null)
                 .show();
     }
 
-    public void showUpdateTaskDialog(Task task, int position) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Mettre à jour la tâche");
-        View view = LayoutInflater.from(this).inflate(R.layout.dialog_update_task, null);
-        EditText etTitle = view.findViewById(R.id.et_task_title);
-        EditText etDescription = view.findViewById(R.id.et_task_description);
-        EditText etDate = view.findViewById(R.id.et_task_date);
-        etTitle.setText(task.getName());
-        etDescription.setText(task.getDescription());
-        etDate.setText(task.getDate());
-        etDate.setOnClickListener(v -> {
-            Calendar calendar = Calendar.getInstance();
-            int year = calendar.get(Calendar.YEAR);
-            int month = calendar.get(Calendar.MONTH);
-            int dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH);
-            DatePickerDialog datePickerDialog = new DatePickerDialog(MainActivity.this, (view1, year1, month1, dayOfMonth1) -> {
-                Calendar selectedDate = Calendar.getInstance();
-                selectedDate.set(year1, month1, dayOfMonth1);
-                SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
-                String formattedDate = sdf.format(selectedDate.getTime());
-                etDate.setText(formattedDate);
-            }, year, month, dayOfMonth);
-            datePickerDialog.show();
-        });
-        builder.setView(view);
-        builder.setPositiveButton("Enregistrer", (dialog, which) -> {
-            String newTitle = etTitle.getText().toString();
-            String newDescription = etDescription.getText().toString();
-            String newDate = etDate.getText().toString();
-            task.setName(newTitle);
-            task.setDescription(newDescription);
-            task.setDate(newDate);
-            db.updateTask(task);
-            taskList.set(position, task);
-            taskAdapter.notifyItemChanged(position);
-        });
-        builder.setNegativeButton("Annuler", (dialog, which) -> dialog.dismiss());
-        builder.show();
-    }
 
 
     void showJoinAgendaDialog() {
@@ -206,11 +228,13 @@ public class MainActivity extends AppCompatActivity {
         EditText editTextPassword = new EditText(this);
         editTextPassword.setHint("Mot de passe");
         editTextPassword.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(30, 20, 30, 20);
         layout.addView(editTextAgendaId);
         layout.addView(editTextPassword);
+
         new AlertDialog.Builder(this)
                 .setTitle("Rejoindre un agenda")
                 .setView(layout)
@@ -218,45 +242,32 @@ public class MainActivity extends AppCompatActivity {
                     String agendaId = editTextAgendaId.getText().toString();
                     String password = editTextPassword.getText().toString();
                     if (agendaId.isEmpty() || password.isEmpty()) {
-                        Toast.makeText(MainActivity.this, "Tous les champs doivent être remplis", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(AgendaActivity.this, "Tous les champs doivent être remplis", Toast.LENGTH_SHORT).show();
                     } else {
-                        OnlineDataBaseHelper dbHelper = new OnlineDataBaseHelper();
-                        dbHelper.checkAgenda("MonAgenda", "MonMotDePasse", exists -> {
-                            if (exists) {
-                                Log.d("AGENDA_CHECK", "L'agenda existe !");
-                            } else {
-                                Log.d("AGENDA_CHECK", "L'agenda n'existe pas.");
-                            }
-                        });
+                        // Firebase check to see if the agenda exists
+                        checkAgendaInFirebase(agendaId, password);
                     }
                 })
                 .setNegativeButton("Annuler", null)
                 .show();
     }
-    public void onBackPressed() {
-        if (doitAfficherConfirmation()) {
-            showExitConfirmationDialog();
-        } else {
-            super.onBackPressed();
-        }
-    }
 
-    private boolean doitAfficherConfirmation() {
-        return true;
-    }
-
-    private void showExitConfirmationDialog() {
-        new AlertDialog.Builder(this)
-                .setTitle("Quitter l'application")
-                .setMessage("Êtes-vous sûr de vouloir quitter l'application ?")
-                .setPositiveButton("Oui", (dialog, which) -> {
-                    finishAffinity();
+    private void checkAgendaInFirebase(String agendaId, String password) {
+        DocumentReference agendaRef = odb.collection("Agenda").document(agendaId);
+        agendaRef.get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        String storedPassword = documentSnapshot.getString("mdp");
+                        if (storedPassword.equals(password)) {
+                            Toast.makeText(AgendaActivity.this, "Agenda rejoint avec succès", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(AgendaActivity.this, "Mot de passe incorrect", Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        Toast.makeText(AgendaActivity.this, "Agenda non trouvé", Toast.LENGTH_SHORT).show();
+                    }
                 })
-                .setNegativeButton("Non", (dialog, which) -> {
-                    dialog.dismiss();
-                })
-                .setCancelable(true)
-                .show();
+                .addOnFailureListener(e -> Log.e("FIREBASE_ERROR", "Erreur de connexion à Firestore", e));
     }
 
     void showCreateAgendaDialog() {
@@ -264,11 +275,13 @@ public class MainActivity extends AppCompatActivity {
         editTextAgendaName.setHint("Nom de l'agenda");
         EditText editTextPassword = new EditText(this);
         editTextPassword.setHint("Mot de passe");
+
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(30, 20, 30, 20);
         layout.addView(editTextAgendaName);
         layout.addView(editTextPassword);
+
         new AlertDialog.Builder(this)
                 .setTitle("Créer un agenda")
                 .setView(layout)
@@ -276,21 +289,20 @@ public class MainActivity extends AppCompatActivity {
                     String agendaName = editTextAgendaName.getText().toString();
                     String password = editTextPassword.getText().toString();
                     if (agendaName.isEmpty() || password.isEmpty()) {
-                        Toast.makeText(MainActivity.this, "Tous les champs doivent être remplis", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(AgendaActivity.this, "Tous les champs doivent être remplis", Toast.LENGTH_SHORT).show();
                     } else {
-                        OnlineDataBaseHelper.createOnlineAgenda(agendaName, password);
+                        createAgendaInFirebase(agendaName, password);
                     }
                 })
                 .setNegativeButton("Annuler", null)
                 .show();
     }
-    private void addSampleAgenda() {
-        Agenda agenda = new Agenda("agenda1", "Mon Agenda", "motDePasse");
 
-        odb.collection("Agenda").document(Agenda.getId())
-                .set(agenda)
-                .addOnSuccessListener(aVoid -> Log.d("FIREBASE", "Agenda ajouté avec succès"))
-                .addOnFailureListener(e -> Log.e("FIREBASE_ERROR", "Erreur lors de l'ajout de l'agenda", e));
+    private void createAgendaInFirebase(String agendaName, String password) {
+        Agenda newAgenda = new Agenda(agendaName, agendaName, password);
+        odb.collection("Agenda").document(agendaName)
+                .set(newAgenda)
+                .addOnSuccessListener(aVoid -> Log.d("FIREBASE", "Agenda créé avec succès"))
+                .addOnFailureListener(e -> Log.e("FIREBASE_ERROR", "Erreur lors de la création de l'agenda", e));
     }
-
 }

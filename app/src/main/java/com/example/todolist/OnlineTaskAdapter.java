@@ -7,23 +7,26 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.firebase.firestore.FirebaseFirestore;
+
 import java.util.List;
 
 import android.widget.TextView;
 import android.widget.CheckBox;
 import android.widget.Button;
 
-public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder> {
+public class OnlineTaskAdapter extends RecyclerView.Adapter<OnlineTaskAdapter.TaskViewHolder> {
 
     private final Context context;
-    private final List<com.example.todolist.Task> taskList;
-    private final LocalDatabaseHelper db;
+    private final List<Task> taskList;
+    private final FirebaseFirestore odb;
 
-    // Constructeur
-    public TaskAdapter(Context context, List<com.example.todolist.Task> taskList, LocalDatabaseHelper db, MainActivity mainActivity) {
+    // Constructor
+    public OnlineTaskAdapter(Context context, List<Task> taskList) {
         this.context = context;
         this.taskList = taskList;
-        this.db = db;
+        this.odb = FirebaseFirestore.getInstance();
     }
 
     @Override
@@ -42,11 +45,11 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         holder.cbCompleted.setChecked(task.isCompleted());
         holder.cbCompleted.setOnCheckedChangeListener((buttonView, isChecked) -> {
             task.setCompleted(isChecked);
-            db.updateTaskCompletionStatus(task);
+            updateTaskCompletionStatus(task);
         });
 
         holder.btnDelete.setOnClickListener(v -> {
-            db.deleteTask(task.getId());
+            deleteTask(OnlineTask.getOnlineId());
             taskList.remove(position);
             notifyItemRemoved(position);
             notifyItemRangeChanged(position, taskList.size());
@@ -55,12 +58,35 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.TaskViewHolder
         holder.itemView.setOnClickListener(v -> {
             ((MainActivity) context).showUpdateTaskDialog(task, position);
         });
-
     }
 
     @Override
     public int getItemCount() {
         return taskList.size();
+    }
+
+    private void updateTaskCompletionStatus(Task task) {
+        odb.collection("tasks")
+                .document(OnlineTask.getOnlineId())
+                .update("completed", task.isCompleted())
+                .addOnSuccessListener(aVoid -> {
+                    // Handle success (optional)
+                })
+                .addOnFailureListener(e -> {
+                    // Handle failure (optional)
+                });
+    }
+
+    private void deleteTask(String taskId) {
+        odb.collection("tasks")
+                .document(taskId)
+                .delete()
+                .addOnSuccessListener(aVoid -> {
+                    // Handle success (optional)
+                })
+                .addOnFailureListener(e -> {
+                    // Handle failure (optional)
+                });
     }
 
     public static class TaskViewHolder extends RecyclerView.ViewHolder {

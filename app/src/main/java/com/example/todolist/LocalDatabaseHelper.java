@@ -11,7 +11,7 @@ import android.util.Log;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DatabaseHelper extends SQLiteOpenHelper {
+public class LocalDatabaseHelper extends SQLiteOpenHelper {
 
     public static final String DATABASE_NAME = "todolist.db";
     public static final String TABLE_NAME = "tasks";
@@ -23,7 +23,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COLUMN_DATE = "date";
     public static final int DATABASE_VERSION = 10;
 
-    public DatabaseHelper(Context context) {
+    public LocalDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
 
@@ -78,7 +78,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put(COLUMN_NAME, task.getName());
         values.put(COLUMN_DESCRIPTION, task.getDescription());
-        values.put(COLUMN_IS_SHARED, task.isShared() ? 1 : 0); //NON UTILISE
+        values.put(COLUMN_IS_SHARED, 0); //NON UTILISE
         values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0); //1 TRUE | 0 FALSE
         values.put(COLUMN_DATE, task.getDate());
         return db.insert(TABLE_NAME, null, values);
