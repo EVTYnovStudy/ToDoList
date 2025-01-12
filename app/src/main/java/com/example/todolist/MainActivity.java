@@ -29,8 +29,6 @@ import java.util.List;
 import java.util.Calendar;
 import java.text.SimpleDateFormat;
 
-import com.google.firebase.firestore.FirebaseFirestore;
-
 public class MainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private TaskAdapter taskAdapter;
@@ -40,14 +38,11 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvEmptyMessage;
     private DrawerLayout drawerLayout;
     private ActionBarDrawerToggle toggle;
-    private FirebaseFirestore odb;
 
 
     @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        odb = FirebaseFirestore.getInstance();
-        addSampleAgenda();
         setContentView(R.layout.activity_main);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
@@ -220,14 +215,12 @@ public class MainActivity extends AppCompatActivity {
                     if (agendaId.isEmpty() || password.isEmpty()) {
                         Toast.makeText(MainActivity.this, "Tous les champs doivent être remplis", Toast.LENGTH_SHORT).show();
                     } else {
-                        OnlineDataBaseHelper dbHelper = new OnlineDataBaseHelper();
-                        dbHelper.checkAgenda("MonAgenda", "MonMotDePasse", exists -> {
-                            if (exists) {
+                            Boolean exists = false;
+                            if (exists == false) {
                                 Log.d("AGENDA_CHECK", "L'agenda existe !");
                             } else {
                                 Log.d("AGENDA_CHECK", "L'agenda n'existe pas.");
                             }
-                        });
                     }
                 })
                 .setNegativeButton("Annuler", null)
@@ -278,19 +271,10 @@ public class MainActivity extends AppCompatActivity {
                     if (agendaName.isEmpty() || password.isEmpty()) {
                         Toast.makeText(MainActivity.this, "Tous les champs doivent être remplis", Toast.LENGTH_SHORT).show();
                     } else {
-                        OnlineDataBaseHelper.createOnlineAgenda(agendaName, password);
+                        //Check
                     }
                 })
                 .setNegativeButton("Annuler", null)
                 .show();
     }
-    private void addSampleAgenda() {
-        Agenda agenda = new Agenda("agenda1", "Mon Agenda", "motDePasse");
-
-        odb.collection("Agenda").document(Agenda.getId())
-                .set(agenda)
-                .addOnSuccessListener(aVoid -> Log.d("FIREBASE", "Agenda ajouté avec succès"))
-                .addOnFailureListener(e -> Log.e("FIREBASE_ERROR", "Erreur lors de l'ajout de l'agenda", e));
-    }
-
 }
