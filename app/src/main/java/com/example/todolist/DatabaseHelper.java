@@ -27,6 +27,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
 
+    // Crée la table si elle n'existe pas déjà
     @Override
     public void onCreate(SQLiteDatabase db) {
         String CREATE_TABLE = "CREATE TABLE IF NOT EXISTS " + TABLE_NAME + "("
@@ -35,11 +36,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 + COLUMN_DESCRIPTION + " TEXT, "
                 + COLUMN_IS_SHARED + " INTEGER, "
                 + COLUMN_IS_COMPLETED + " INTEGER, "
-                + COLUMN_DATE + " TEXT" + ")";
+                + COLUMN_DATE + " TEXT)";
         db.execSQL(CREATE_TABLE);
         Log.d("DATABASE", "Database created successfully");
     }
 
+    // Mise à jour de la base de données lors de changements de version
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
 
@@ -72,18 +74,30 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             Log.d("DATABASE", "Recreated tasks table with correct columns.");
         }
     }
+    public void openDatabase() {
+        SQLiteDatabase db = this.getWritableDatabase(); // Ouvre la base de données en mode écriture
+        if (db != null && db.isOpen()) {
+            Log.d("DATABASE", "Base de données ouverte avec succès !");
+        } else {
+            Log.e("DATABASE", "Erreur lors de l'ouverture de la base de données.");
+        }
+    }
 
+    // Ajouter une tâche
     public long addTask(Task task) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COLUMN_NAME, task.getName());
         values.put(COLUMN_DESCRIPTION, task.getDescription());
-        values.put(COLUMN_IS_SHARED, task.isShared() ? 1 : 0); //NON UTILISE
-        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0); //1 TRUE | 0 FALSE
+        values.put(COLUMN_IS_SHARED, task.isShared() ? 1 : 0); // NON UTILISE
+        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0); // 1 TRUE | 0 FALSE
         values.put(COLUMN_DATE, task.getDate());
-        return db.insert(TABLE_NAME, null, values);
+        long id = db.insert(TABLE_NAME, null, values);
+        db.close();
+        return id;
     }
 
+    // Récupérer toutes les tâches
     @SuppressLint("Range")
     public List<Task> getAllTasks() {
         List<Task> taskList = new ArrayList<>();
@@ -106,29 +120,31 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return taskList;
     }
 
+    // Mettre à jour le statut d'une tâche (complété ou non)
     public void updateTaskCompletionStatus(Task task) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-        values.put("completed", task.isCompleted() ? 1 : 0); //1 TRUE | 0 FALSE
-        db.update(TABLE_NAME, values, "id = ?", new String[]{String.valueOf(task.getId())});
+        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0); // 1 TRUE | 0 FALSE
+        db.update(TABLE_NAME, values, COLUMN_ID + " = ?", new String[]{String.valueOf(task.getId())});
         db.close();
     }
 
+    // Supprimer une tâche
     public void deleteTask(int taskId) {
         SQLiteDatabase db = this.getWritableDatabase();
         db.delete(TABLE_NAME, COLUMN_ID + " = ?", new String[]{String.valueOf(taskId)});
         db.close();
     }
 
+    // Mettre à jour les détails d'une tâche
     public void updateTask(Task task) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COLUMN_NAME, task.getName());
         values.put(COLUMN_DESCRIPTION, task.getDescription());
         values.put(COLUMN_DATE, task.getDate());
-        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0); //1 TRUE | 0 FALSE
+        values.put(COLUMN_IS_COMPLETED, task.isCompleted() ? 1 : 0); // 1 TRUE | 0 FALSE
         db.update(TABLE_NAME, values, COLUMN_ID + " = ?", new String[]{String.valueOf(task.getId())});
         db.close();
     }
-
 }
